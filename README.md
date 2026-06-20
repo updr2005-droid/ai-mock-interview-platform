@@ -1,16 +1,83 @@
-# React + Vite
+# AI Mock Interview Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An AI-powered mock interview platform that helps users practice interviews, receive feedback, and improve their performance.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+* Role-based interview questions
+* Multiple difficulty levels
+* AI-generated interview questions
+* Answer evaluation and feedback
+* Resume upload support
+* Interactive user interface
+* Real-time interview experience
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Frontend
 
-## Expanding the ESLint configuration
+* React
+* Vite
+* CSS
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Backend
+
+* Node.js
+* Express.js
+
+## Project Structure
+
+```text
+frontend/
+backend/
+src/
+public/
+```
+
+## Installation
+
+### Clone Repository
+
+```bash
+git clone https://github.com/updr2005-droid/ai-mock-interview-platform.git
+```
+
+### Install Dependencies
+
+```bash
+npm install
+cd frontend
+npm install
+cd ../backend
+npm install
+```
+
+### Run Application
+
+Frontend:
+
+```bash
+npm run dev
+```
+
+Backend:
+
+```bash
+node server.js
+```
+
+## Future Improvements
+
+* Resume-based personalized interview questions
+* Improved AI answer evaluation
+* Interview analytics dashboard
+* Voice-based interviews
+* Performance tracking
+
+## Known Issue
+
+During testing, a major issue was identified in the answer evaluation module. Irrelevant or nonsensical responses can sometimes receive high scores and generic positive feedback. Future updates will introduce stricter relevance validation and improved scoring logic.
+
+## Author
+
+Dhruv Upadhyay
