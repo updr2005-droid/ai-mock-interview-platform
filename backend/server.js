@@ -105,6 +105,58 @@ Rules:
 app.post("/evaluate", async (req, res) => {
   try {
     const { question, answer } = req.body;
+    // =========================
+// Early Rejection Checks
+// =========================
+const cleanedAnswer = answer.trim().toLowerCase();
+
+// Too short
+if (cleanedAnswer.split(/\s+/).length < 3) {
+  return res.json({
+    feedback: `
+Score: 0/10
+
+Strengths:
+- Attempted a response.
+
+Improvements:
+- Answer is too short to evaluate.
+- Provide a meaningful explanation.
+`
+  });
+}
+
+// Common nonsense answers
+const bannedPhrases = [
+  "i am a banana",
+  "banana",
+  "asdf",
+  "asdf asdf",
+  "asdf asdf asdf",
+  "qwerty",
+  "random text",
+  "hello world",
+  "test",
+  "nothing",
+  "idk",
+  "i dont know",
+  "i don't know"
+];
+
+if (bannedPhrases.includes(cleanedAnswer)) {
+  return res.json({
+    feedback: `
+Score: 0/10
+
+Strengths:
+- Attempted a response.
+
+Improvements:
+- The answer is not relevant to the question.
+- Avoid random, placeholder, or nonsensical text.
+`
+  });
+}
 
     if (!answer || answer.trim().length < 5) {
       return res.json({
@@ -138,12 +190,26 @@ Rules:
 - Unrelated answer = NOT_RELEVANT
 - Partial attempt = RELEVANT
 
-Respond ONLY with:
+Respond with ONLY one word.
 
 RELEVANT
 
 or
 
+NOT_RELEVANT
+
+Examples:
+
+Question: What is React?
+Answer: I am a banana
+NOT_RELEVANT
+
+Question: What is React?
+Answer: React is a JavaScript library used to build user interfaces.
+RELEVANT
+
+Question: Explain closures in JavaScript.
+Answer: The weather is nice today.
 NOT_RELEVANT
 `,
       stream: false,
@@ -151,9 +217,13 @@ NOT_RELEVANT
 
     const relevance = relevanceCheck.response.trim();
 
-    if (relevance.includes("NOT_RELEVANT")) {
-      return res.json({
-        feedback: `
+console.log("QUESTION:", question);
+console.log("ANSWER:", answer);
+console.log("RELEVANCE:", relevance);
+
+if (relevance.includes("NOT_RELEVANT")) {
+  return res.json({
+    feedback: `
 Score: 0/10
 
 Strengths:
@@ -164,9 +234,8 @@ Improvements:
 - Focus on answering the technical concept being asked.
 - Avoid random or unrelated text.
 `
-      });
-    }
-
+  });
+}
     // STEP 2: Actual Evaluation
     const evaluation = await ollama.generate({
       model: "llama3.2:3b",
