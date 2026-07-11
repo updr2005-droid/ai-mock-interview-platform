@@ -12,6 +12,7 @@ const connectDB = require("./config/db");
 const cors = require("cors");
 const ollama = require("ollama").default;
 const Resume = require("./models/Resume");
+const Interview = require("./models/Interview");
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const fs = require("fs");
@@ -153,7 +154,13 @@ Instructions:
 // =========================
 app.post("/evaluate", async (req, res) => {
   try {
-    const { question, answer } = req.body;
+   const {
+  question,
+  answer,
+  role,
+  difficulty,
+  resumeName,
+} = req.body;
     // =========================
 // Early Rejection Checks
 // =========================
@@ -175,6 +182,56 @@ Improvements:
   });
 }
 
+// =========================
+// Get Interview History
+// =========================
+app.get("/history", async (req, res) => {
+  try {
+    const history = await Interview.find().sort({
+      createdAt: -1,
+    });
+
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch history",
+    });
+  }
+});
+
+// =========================
+// Delete One Interview
+// =========================
+app.delete("/history/:id", async (req, res) => {
+  try {
+    await Interview.findByIdAndDelete(req.params.id);
+
+    res.json({
+      message: "Interview deleted",
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Delete failed",
+    });
+  }
+});
+
+// =========================
+// Clear History
+// =========================
+app.delete("/history", async (req, res) => {
+  try {
+    await Interview.deleteMany({});
+
+    res.json({
+      message: "History cleared",
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed",
+    });
+  }
+});
 // Common nonsense answers
 const bannedPhrases = [
   "i am a banana",
@@ -356,9 +413,29 @@ Improvements:
       stream: false,
     });
 
+    const feedback = evaluation.response.trim();
+
+let score = 0;
+
+const match = feedback.match(/Score:\s*(\d+)\/10/i);
+
+if (match) {
+  score = parseInt(match[1]);
+}
+
+await Interview.create({
+  role,
+  difficulty,
+  question,
+  answer,
+  score,
+  feedback,
+  resumeName,
+});
+
     res.json({
-      feedback: evaluation.response.trim(),
-    });
+  feedback,
+});
 
   } catch (error) {
     console.error("Evaluation Error:", error);
