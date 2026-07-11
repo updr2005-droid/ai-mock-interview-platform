@@ -1,11 +1,29 @@
+const dns = require("dns");
+
+dns.setServers([
+  "8.8.8.8",
+  "8.8.4.4"
+]);
+
+require("dotenv").config();
+
 const express = require("express");
+const connectDB = require("./config/db");
 const cors = require("cors");
 const ollama = require("ollama").default;
+const Resume = require("./models/Resume");
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const fs = require("fs");
 
 const app = express();
+
+console.log(
+  "All env keys:",
+  Object.keys(process.env).filter(k => k.includes("MONGO"))
+);
+
+connectDB();
 
 app.use(cors());
 app.use(express.json());
@@ -27,30 +45,54 @@ app.post("/upload-resume", upload.single("resume"), async (req, res) => {
 
     const pdfBuffer = fs.readFileSync(req.file.path);
     const pdfData = await pdfParse(pdfBuffer);
+    
+    console.log("===== RESUME TEXT =====");
+    console.log(pdfData.text);
+    console.log("=======================");
+
 
     const resumeText = pdfData.text.substring(0, 3000);
 
-    const aiResponse = await ollama.generate({
-      model: "llama3.2:1b",
-      prompt: `
-Extract technical skills from this resume.
+// Extract skills directly from resume text
+const skillsMatch = resumeText.match(
+  /TECHNICAL SKILLS:([\s\S]*?)KEY COMPETENCIES:/i
+);
 
-Resume:
-${resumeText}
+let skills = "";
 
-Rules:
-- Return ONLY a comma separated list.
-- No introduction.
-- No explanation.
-- No numbering.
-- Maximum 10 skills.
-`,
-      stream: false,
-    });
+if (skillsMatch) {
+  skills = skillsMatch[1]
+    .replace(/Programming:/gi, "")
+    .replace(/Database:/gi, "")
+    .replace(/Web:/gi, "")
+    .replace(/Data Tools:/gi, "")
+    .replace(/\./g, "")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-    res.json({
-      skills: aiResponse.response.trim(),
-    });
+// Fallback if section not found
+if (!skills) {
+  skills = "No skills detected";
+}
+
+const suggestedRole = "Data Analyst";
+
+const resume = await Resume.create({
+  resumeText,
+  skills,
+  suggestedRole,
+});
+
+fs.unlinkSync(req.file.path);
+
+res.json({
+  resumeId: resume._id,
+  skills,
+  suggestedRole,
+  resumeText,
+});
   } catch (error) {
     console.error("Resume Error:", error);
 
@@ -65,36 +107,43 @@ Rules:
 // =========================
 app.post("/question", async (req, res) => {
   try {
-    const { role, difficulty, skills } = req.body;
+    const { role, difficulty, resumeText } = req.body;
 
-    const response = await ollama.generate({
-      model: "llama3.2:1b",
-      prompt: `
-Generate ONE ${difficulty} level technical interview question.
+    const prompt = `
+You are an experienced technical interviewer.
 
-Role:
-${role}
+Candidate Resume:
+${resumeText || "No resume uploaded."}
 
-Candidate Skills:
-${skills || "Not Available"}
+Job Role: ${role}
+Difficulty: ${difficulty}
 
-Rules:
-- Ask only technical questions.
-- Prefer skills if available.
-- Return only the question.
-- Maximum 25 words.
-`,
-      stream: false,
+Instructions:
+- Generate ONLY ONE interview question.
+- If resume is available, ask ONLY from the resume.
+- Prefer questions about projects, skills, education, internships, certifications.
+- Do NOT ask anything not mentioned in the resume.
+- If no resume is available, ask one ${difficulty} level ${role} interview question.
+- Return ONLY the question.
+`;
+
+    const response = await ollama.chat({
+      model: "llama3.2:3b",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
     });
 
     res.json({
-      question: response.response.trim(),
+      question: response.message.content.trim(),
     });
-  } catch (error) {
-    console.error("Question Error:", error);
-
+  } catch (err) {
+    console.error(err);
     res.status(500).json({
-      error: "Question generation failed",
+      error: "Failed to generate question",
     });
   }
 });
@@ -323,6 +372,8 @@ Improvements:
 // =========================
 // Start Server
 // =========================
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
