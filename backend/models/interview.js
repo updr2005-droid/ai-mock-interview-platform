@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const interviewSchema = new mongoose.Schema(
   {
@@ -30,25 +30,20 @@ const interviewSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-  },
-  {
-    timestamps: true,
-  }
-);
+    candidateName: {
+  type: String,
+  default: "",
+},
 
-export default mongoose.model("Interview", interviewSchema);
+interviewer: {
+  type: String,
+  default: "",
+},
 
-const mongoose = require("mongoose");
-
-const interviewSchema = new mongoose.Schema(
-  {
-    role: String,
-    difficulty: String,
-    question: String,
-    answer: String,
-    score: Number,
-    feedback: String,
-    resumeName: String,
+skills: {
+  type: String,
+  default: "",
+},
   },
   {
     timestamps: true,

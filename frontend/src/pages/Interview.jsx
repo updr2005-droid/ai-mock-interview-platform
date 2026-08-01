@@ -1,7 +1,32 @@
-import { useEffect, useState } from "react";
-import StatsCards from "./components/StatsCards";
-import InterviewHistory from "./components/InterviewHistory";
+import { useState } from "react";
 import axios from "axios";
+import ChooseInterviewer from "../components/ChooseInterviewer";
+import {
+  Briefcase,
+  Upload,
+  Sparkles,
+  Send,
+  FileText,
+  BrainCircuit,
+} from "lucide-react";
+
+const ROLES = [
+  "Software Engineer",
+  "Frontend Developer",
+  "Backend Developer",
+  "Full Stack Developer",
+  "React Developer",
+  "Node.js Developer",
+  "Python Developer",
+  "Java Developer",
+  "Machine Learning Engineer",
+  "Data Analyst",
+  "Data Scientist",
+  "AI Engineer",
+  "Cyber Security Analyst",
+  "Cloud Engineer",
+  "DevOps Engineer",
+];
 
 export default function Interview() {
   const [role, setRole] = useState("Software Engineer");
@@ -9,289 +34,295 @@ export default function Interview() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const [resume, setResume] = useState(null);
   const [skills, setSkills] = useState("");
   const [suggestedRole, setSuggestedRole] = useState("");
-  const [uploading, setUploading] = useState(false);
   const [resumeText, setResumeText] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [history, setHistory] = useState([]);
-const generateQuestion = async () => {
+
+  const [candidateName, setCandidateName] = useState("");
+  const [questionNumber, setQuestionNumber] = useState(1);
+
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [loadingEvaluation, setLoadingEvaluation] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedInterviewer, setSelectedInterviewer] = useState(null);
+
+  const speak = async (text) => {
   try {
-    setLoading(true);
+    if (!selectedInterviewer) {
+      alert("Please select an interviewer first!");
+      return;
+    }
 
-    const response = await axios.post("http://localhost:5000/question", {
-      role,
-      difficulty,
-      resumeText,
-    });
+    console.log("Selected Interviewer:", selectedInterviewer);
+    console.log("Voice ID:", selectedInterviewer?.voice);
 
-    setQuestion(response.data.question);
-    setAnswer("");
-    setResult("");
-  } catch (err) {
-    console.error(err);
-    alert("Failed to generate question");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const uploadResume = async () => {
-  if (!resume) {
-    alert("Please select a resume first.");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("resume", resume);
-
-  try {
-    setUploading(true);
-
-    const res = await axios.post(
-      "http://localhost:5000/upload-resume",
-      formData,
+    const response = await axios.post(
+      "http://localhost:5000/speak",
       {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        text,
+        voiceId: selectedInterviewer.voice,
+      },
+      {
+        responseType: "blob",
       }
     );
 
-    // Backend se skills aur suggested role lena
-    setSkills(res.data.skills || "No skills detected");
+    const audio = new Audio(URL.createObjectURL(response.data));
+    await audio.play();
 
-  setResumeText(res.data.resumeText || "");
+  } catch (err) {
+    console.error("Speech Error:", err);
+  }
+};
+  const generateQuestion = async () => {
+    try {
+      setLoadingQuestion(true);
+      setResult("");
 
-    if (res.data.suggestedRole) {
-      setSuggestedRole(res.data.suggestedRole);
-      setRole(res.data.suggestedRole); // Dropdown bhi auto update hoga
+      const res = await axios.post("http://localhost:5000/question", {
+  role,
+  difficulty,
+  resumeText,
+  candidateName,
+  questionNumber,
+});
+
+     const generatedQuestion = res.data.question || "No question generated";
+
+setQuestion(generatedQuestion);
+
+setQuestionNumber(prev => prev + 1);
+
+await speak(generatedQuestion);
+
+setAnswer("");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate question");
+    } finally {
+      setLoadingQuestion(false);
+    }
+  };
+
+  const uploadResume = async () => {
+    if (!resume) {
+      alert("Please select a resume first.");
+      return;
     }
 
-    alert("Resume uploaded successfully!");
-  } catch (err) {
-    console.error("Resume Upload Error:", err);
-    alert("Resume upload failed.");
-  } finally {
-    setUploading(false);
-  }
-};const submitAnswer = async () => {
-  if (!answer.trim()) {
-    alert("Please enter your answer.");
-    return;
-  }
+    const formData = new FormData();
+    formData.append("resume", resume);
 
-  try {
-    setLoading(true);
+    try {
+      setUploading(true);
 
-    const res = await axios.post(
-      "http://localhost:5000/evaluate",
-      {
+      const res = await axios.post(
+        "http://localhost:5000/upload-resume",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setSkills(res.data.skills || "No skills detected");
+      setResumeText(res.data.resumeText || "");
+      setCandidateName(res.data.candidateName || "Candidate");
+
+      if (res.data.suggestedRole) {
+        setSuggestedRole(res.data.suggestedRole);
+        setRole(res.data.suggestedRole);
+      }
+
+      alert("Resume uploaded successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Resume upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submitAnswer = async () => {
+    if (!answer.trim()) {
+      alert("Please enter your answer.");
+      return;
+    }
+
+    try {
+      setLoadingEvaluation(true);
+
+      const res = await axios.post("http://localhost:5000/evaluate", {
         question,
         answer,
         role,
         difficulty,
         resumeName: resume?.name || "No Resume Uploaded",
-      }
-    );
+      });
 
-    setResult(res.data.feedback);
-  } catch (err) {
-    console.error(err);
-    alert("Evaluation failed.");
-  } finally {
-    setLoading(false);
-  }
-};
-    <div className="min-h-screen bg-[#020817] py-12 px-6">
-     <div className="max-w-6xl mx-auto bg-[#111827] border border-gray-700 rounded-3xl p-10 shadow-2xl">
+      setResult(res.data.feedback || "No feedback received");
+    } catch (err) {
+      console.error(err);
+      alert("Evaluation failed.");
+    } finally {
+      setLoadingEvaluation(false);
+    }
+  };
 
-       <h1 className="text-5xl font-extrabold text-white mb-10">
-  AI <span className="text-blue-500">Mock Interview</span>
-</h1>
-
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-
-  {/* Job Role */}
-  <div>
-    <h2 className="text-white text-lg font-semibold mb-2">
-      Select Job Role
+  return (
+    <div className="min-h-screen bg-[#020817] py-10 px-4">
+      <div className="max-w-5xl mx-auto bg-[#111827] border border-gray-700 rounded-3xl p-6 md:p-10 shadow-2xl">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-3 rounded-2xl bg-blue-600/20 border border-blue-500/30">
+            <BrainCircuit className="w-7 h-7 text-blue-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl md:text-5xl font-extrabold text-white">
+              AI <span className="text-blue-400">Mock Interview</span>
+            </h1>
+            <p className="text-gray-400 mt-1">
+              Generate personalized interview questions and get AI feedback.
+            </p>
+            {!selectedInterviewer && (
+  <>
+    <h2 className="text-white text-2xl font-bold mt-8 mb-4">
+      Choose Your AI Interviewer
     </h2>
 
-    <select
-      value={role}
-      onChange={(e) => setRole(e.target.value)}
-      className="w-full bg-[#1E293B] text-white border border-gray-600 rounded-xl p-4"
-    >
-      <option>Software Engineer</option>
-      <option>Frontend Developer</option>
-      <option>Backend Developer</option>
-      <option>Full Stack Developer</option>
-      <option>Web Developer</option>
-      <option>React Developer</option>
-      <option>Node.js Developer</option>
-      <option>Java Developer</option>
-      <option>Python Developer</option>
-      <option>C++ Developer</option>
-      <option>Android Developer</option>
-      <option>iOS Developer</option>
-      <option>Flutter Developer</option>
-      <option>DevOps Engineer</option>
-      <option>Cloud Engineer</option>
-      <option>AI Engineer</option>
-      <option>Machine Learning Engineer</option>
-      <option>Data Scientist</option>
-      <option>Data Analyst</option>
-      <option>Data Engineer</option>
-      <option>Cyber Security Analyst</option>
-      <option>Network Engineer</option>
-      <option>QA Engineer</option>
-      <option>UI/UX Designer</option>
-      <option>Business Analyst</option>
-      <option>Product Manager</option>
-    </select>
-  </div>
+    <ChooseInterviewer
+      onSelect={(person) => setSelectedInterviewer(person)}
+    />
+  </>
+)}
+          </div>
+        </div>
 
-  {/* Difficulty */}
-  <div>
-    <h2 className="text-white text-lg font-semibold mb-2">
-      Interview Difficulty
-    </h2>
+        <div className="grid md:grid-cols-2 gap-5 mb-8">
+          <div className="bg-[#1E293B] border border-gray-700 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Briefcase className="w-5 h-5 text-blue-400" />
+              <h2 className="text-white font-semibold">Select Job Role</h2>
+            </div>
 
-    <select
-      value={difficulty}
-      onChange={(e) => setDifficulty(e.target.value)}
-      className="w-full bg-[#1E293B] text-white border border-gray-600 rounded-xl p-4"
-    >
-      <option>Easy</option>
-      <option>Medium</option>
-      <option>Hard</option>
-    </select>
-  </div>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-[#0F172A] text-white border border-gray-600 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
 
-</div>
+          <div className="bg-[#1E293B] border border-gray-700 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              <h2 className="text-white font-semibold">Interview Difficulty</h2>
+            </div>
 
-        {/* Resume Upload UI */}
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full bg-[#0F172A] text-white border border-gray-600 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option>Easy</option>
+              <option>Medium</option>
+              <option>Hard</option>
+            </select>
+          </div>
+        </div>
 
-       <div className="bg-[#1E293B] border border-gray-700 rounded-2xl p-6 mb-8">
-          <h2 className="text-white text-2xl font-bold mb-5 flex items-center gap-2">
-  📄 Upload Your Resume
-</h2>
+        <div className="bg-[#1E293B] border border-gray-700 rounded-2xl p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-5 h-5 text-cyan-400" />
+            <h2 className="text-white text-xl font-bold">Upload Resume</h2>
+          </div>
 
-<label className="block text-gray-300 font-medium mb-3">
-  Choose Resume (PDF, DOC, DOCX)
-</label>
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx"
+            onChange={(e) => setResume(e.target.files?.[0] || null)}
+            className="w-full bg-[#0F172A] text-gray-300 border border-gray-600 rounded-xl p-3 mb-4 file:bg-blue-600 file:text-white file:border-0 file:px-4 file:py-2 file:rounded-lg file:mr-4"
+          />
 
-<input
-  type="file"
-  accept=".pdf,.doc,.docx"
-  onChange={(e) => {
-  setResume(e.target.files[0]);
-  setSelectedFile(e.target.files[0]);
-}}
-  className="
-    w-full
-    bg-[#0F172A]
-    text-gray-300
-    border-2
-    border-blue-500
-    rounded-xl
-    p-3
-    cursor-pointer
-    transition-all
-    duration-300
-    hover:border-cyan-400
-    hover:shadow-lg
-    hover:shadow-blue-500/30
-
-    file:bg-gradient-to-r
-    file:from-blue-600
-    file:to-cyan-500
-    file:text-white
-    file:font-semibold
-    file:border-0
-    file:px-5
-    file:py-2
-    file:rounded-lg
-    file:cursor-pointer
-    file:mr-4
-  "
-/>
           <button
             onClick={uploadResume}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-xl text-white font-semibold"
+            disabled={uploading}
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-5 py-3 rounded-xl text-white font-semibold transition-colors"
           >
+            <Upload className="w-4 h-4" />
             {uploading ? "Uploading..." : "Upload Resume"}
           </button>
-{skills && (
-  <div className="mt-6">
-    <h3 className="text-white text-lg font-bold mb-2">
-      Detected Skills
-    </h3>
 
-    <div className="bg-[#0F172A] border border-gray-700 rounded-xl p-4">
-      <p className="text-gray-300 whitespace-pre-wrap leading-7">
-        {skills}
-      </p>
-    </div>
-  </div>
-)}
+          {skills && (
+            <div className="mt-5 bg-[#0F172A] border border-gray-700 rounded-xl p-4">
+              <h3 className="text-white font-semibold mb-2">Detected Skills</h3>
+              <p className="text-gray-300 whitespace-pre-wrap leading-7">
+                {skills}
+              </p>
+            </div>
+          )}
 
-{suggestedRole && (
-  <div className="mt-6">
-    <h3 className="text-white text-lg font-bold mb-2">
-      Suggested Role
-    </h3>
-
-    <div className="bg-[#0F172A] border border-blue-500 rounded-xl p-4">
-      <p className="text-cyan-400 text-lg font-semibold">
-        {suggestedRole}
-      </p>
-    </div>
-  </div>
-)}
+          {suggestedRole && (
+            <div className="mt-5 bg-[#0F172A] border border-cyan-500 rounded-xl p-4">
+              <h3 className="text-white font-semibold mb-1">Suggested Role</h3>
+              <p className="text-cyan-400 font-bold text-lg">{suggestedRole}</p>
+            </div>
+          )}
         </div>
 
         <button
           onClick={generateQuestion}
-         className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl text-white font-bold w-full"
+          disabled={loadingQuestion}
+          className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-6 py-4 rounded-2xl text-white font-bold text-lg transition-colors"
         >
-          {loading ? "Generating..." : "Generate Question"}
+          <Sparkles className="w-5 h-5" />
+          {loadingQuestion ? "Generating..." : "Generate Question"}
         </button>
 
         {question && (
-          <>
-            <div className="mt-8 bg-[#1E293B] border border-blue-500 rounded-2xl p-6 text-white">
-              <h2 className="font-bold mb-2">Question</h2>
-              {question}
+          <div className="mt-8 space-y-6">
+            <div className="bg-[#1E293B] border border-blue-500 rounded-2xl p-6">
+              <h2 className="text-white text-xl font-bold mb-3">Question</h2>
+              <p className="text-gray-200 leading-7">{question}</p>
             </div>
 
-            <textarea
-             className="w-full bg-[#0F172A] border border-gray-700 rounded-2xl p-5 mt-6 h-48 text-white"
-              placeholder="Type your answer..."
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-            />
+            <div className="bg-[#1E293B] border border-gray-700 rounded-2xl p-6">
+              <h2 className="text-white text-xl font-bold mb-3">Your Answer</h2>
 
-            <button
-              onClick={submitAnswer}
-             className="bg-green-600 hover:bg-green-700 px-8 py-4 rounded-xl text-white font-bold mt-6 w-full"
-            >
-              {loading ? "Evaluating..." : "Submit Answer"}
-            </button>
-          </>
-        )}
+              <textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer here..."
+                className="w-full bg-[#0F172A] border border-gray-700 rounded-xl p-4 h-44 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
 
-        {result && (
-          <div className="mt-8 bg-[#1E293B] border border-green-500 rounded-2xl p-6 text-white">
-            <h2 className="font-bold mb-2">AI Feedback</h2>
-            <pre className="whitespace-pre-wrap">{result}</pre>
+              <button
+                onClick={submitAnswer}
+                disabled={loadingEvaluation}
+                className="mt-4 inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 px-5 py-3 rounded-xl text-white font-semibold transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                {loadingEvaluation ? "Evaluating..." : "Submit Answer"}
+              </button>
+            </div>
           </div>
         )}
 
+        {result && (
+          <div className="mt-8 bg-[#1E293B] border border-green-500 rounded-2xl p-6">
+            <h2 className="text-white text-xl font-bold mb-3">AI Feedback</h2>
+            <pre className="text-gray-200 whitespace-pre-wrap leading-7 font-sans">
+              {result}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );

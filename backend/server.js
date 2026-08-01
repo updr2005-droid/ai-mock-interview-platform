@@ -7,6 +7,10 @@ dns.setServers([
 
 require("dotenv").config();
 
+console.log("ELEVENLABS_API_KEY:", process.env.ELEVENLABS_API_KEY ? "Loaded ✅" : "Missing ❌");
+console.log("MONGODB_URI:", process.env.MONGODB_URI ? "Loaded ✅" : "Missing ❌");
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Loaded ✅" : "Missing ❌");
+
 const express = require("express");
 const connectDB = require("./config/db");
 const cors = require("cors");
@@ -37,6 +41,60 @@ app.get("/", (req, res) => {
   res.send("Backend is running!");
 });
 
+app.post("/speak", async (req, res) => {
+  try {
+   const { text, voiceId } = req.body;
+
+   console.log("Using Voice:", voiceId);
+
+    if (!text) {
+      return res.status(400).json({
+        error: "Text is required",
+      });
+    }
+
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+        }),
+      }
+    );
+
+    if (!response.ok) {
+  const error = await response.text();
+
+  console.log("==================================");
+  console.log("ElevenLabs Status:", response.status);
+  console.log("ElevenLabs Error:", error);
+  console.log("==================================");
+
+  return res.status(response.status).json({ error });
+}
+
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(audioBuffer);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: "Speech generation failed",
+    });
+  }
+});
+
+
+
 // =========================
 // Resume Upload
 // =========================
@@ -53,6 +111,17 @@ app.post("/upload-resume", upload.single("resume"), async (req, res) => {
 
 
     const resumeText = pdfData.text.substring(0, 3000);
+
+    let candidateName = "Candidate";
+
+const lines = resumeText
+  .split("\n")
+  .map(line => line.trim())
+  .filter(Boolean);
+
+if (lines.length > 0) {
+  candidateName = lines[0];
+}
 
 // Extract skills directly from resume text
 const skillsMatch = resumeText.match(
@@ -90,6 +159,7 @@ fs.unlinkSync(req.file.path);
 
 res.json({
   resumeId: resume._id,
+  candidateName,
   skills,
   suggestedRole,
   resumeText,
@@ -108,24 +178,71 @@ res.json({
 // =========================
 app.post("/question", async (req, res) => {
   try {
-    const { role, difficulty, resumeText } = req.body;
+    const {
+  role,
+  difficulty,
+  resumeText,
+  candidateName,
+  questionNumber,
+} = req.body;
 
-    const prompt = `
-You are an experienced technical interviewer.
+const prompt = `
+You are a professional HR and Technical Interviewer.
 
-Candidate Resume:
-${resumeText || "No resume uploaded."}
+Candidate Name:
+${candidateName || "Candidate"}
 
-Job Role: ${role}
-Difficulty: ${difficulty}
+Job Role:
+${role}
 
-Instructions:
-- Generate ONLY ONE interview question.
-- If resume is available, ask ONLY from the resume.
-- Prefer questions about projects, skills, education, internships, certifications.
-- Do NOT ask anything not mentioned in the resume.
-- If no resume is available, ask one ${difficulty} level ${role} interview question.
-- Return ONLY the question.
+Difficulty:
+${difficulty}
+
+Resume:
+${resumeText || "No Resume Uploaded"}
+
+Current Interview Question Number:
+${questionNumber}
+
+Interview Rules:
+
+Question 1:
+Greet the candidate by name and ask:
+"Tell me about yourself."
+
+Question 2:
+Ask:
+"Please walk me through your resume."
+
+Question 3:
+Ask:
+"Why are you interested in the ${role} role?"
+
+Question 4:
+Ask about the candidate's strengths.
+
+Question 5:
+Ask about one weakness and how they are improving it.
+
+Question 6 onwards:
+
+If resume exists:
+- Ask about projects.
+- Ask about internships.
+- Ask about certifications.
+- Ask about skills.
+- Ask follow-up questions from resume.
+
+After resume questions:
+Ask technical questions according to ${role} and ${difficulty}.
+
+Rules:
+
+- Ask ONLY ONE question.
+- Never generate multiple questions.
+- Never repeat previous questions.
+- Keep questions conversational.
+- Return ONLY the interviewer's question.
 `;
 
     const response = await ollama.chat({
@@ -182,56 +299,10 @@ Improvements:
   });
 }
 
-// =========================
-// Get Interview History
-// =========================
-app.get("/history", async (req, res) => {
-  try {
-    const history = await Interview.find().sort({
-      createdAt: -1,
-    });
 
-    res.json(history);
-  } catch (error) {
-    res.status(500).json({
-      error: "Failed to fetch history",
-    });
-  }
-});
 
-// =========================
-// Delete One Interview
-// =========================
-app.delete("/history/:id", async (req, res) => {
-  try {
-    await Interview.findByIdAndDelete(req.params.id);
 
-    res.json({
-      message: "Interview deleted",
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "Delete failed",
-    });
-  }
-});
 
-// =========================
-// Clear History
-// =========================
-app.delete("/history", async (req, res) => {
-  try {
-    await Interview.deleteMany({});
-
-    res.json({
-      message: "History cleared",
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "Failed",
-    });
-  }
-});
 // Common nonsense answers
 const bannedPhrases = [
   "i am a banana",
@@ -331,7 +402,6 @@ if (relevance.includes("NOT_RELEVANT")) {
   return res.json({
     feedback: `
 Score: 0/10
-
 Strengths:
 - Attempted a response.
 
@@ -442,6 +512,65 @@ await Interview.create({
 
     res.status(500).json({
       error: "Evaluation failed",
+    });
+  }
+});
+
+// =========================
+// Get Interview History
+// =========================
+app.get("/history", async (req, res) => {
+  try {
+    const history = await Interview.find().sort({
+      createdAt: -1,
+    });
+
+    res.json(history);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Failed to fetch history",
+    });
+  }
+});
+
+
+
+// =========================
+// Delete One Interview
+// =========================
+app.delete("/history/:id", async (req, res) => {
+  try {
+    await Interview.findByIdAndDelete(req.params.id);
+
+    res.json({
+      message: "Interview deleted",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Delete failed",
+    });
+  }
+});
+
+// =========================
+// Clear History
+// =========================
+app.delete("/history", async (req, res) => {
+  try {
+    await Interview.deleteMany({});
+
+    res.json({
+      message: "History cleared",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Failed to clear history",
     });
   }
 });
