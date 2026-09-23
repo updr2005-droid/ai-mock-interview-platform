@@ -33,10 +33,16 @@ export default function ChooseInterviewer({ onSelect }) {
           </div>
 
           <button
-            className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold"
-          >
-            Select Interviewer
-          </button>
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    onSelect(person);
+  }}
+  className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold"
+>
+  Select Interviewer
+</button>
+
         </div>
       ))}
     </div>
